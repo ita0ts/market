@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>MarketFlow - Login</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f4f6fa;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}
+    .card{background:#fff;padding:30px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.1);width:300px;text-align:center;}
+    input{width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;}
+    button{width:100%;padding:10px;background:#0066ff;color:white;border:0;border-radius:6px;cursor:pointer;}
+    button:hover{background:#0053d6;}
+    a{color:#0066ff;text-decoration:none;font-size:14px;}
+  </style>
+</head>
+<body>
+<div style="text-align:center; margin-top:100px;">
+  <h2>Login</h2>
+  <input type="email" id="email" placeholder="Email" required><br><br>
+  <input type="password" id="password" placeholder="Senha" required><br><br>
+  <button onclick="loginUser()">Entrar</button><br><br>
+  <a href="register.html">Criar conta</a>
+</div>
+
+
+<!-- Firebase compat -->
+<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+
+<script>
+  // 🔹 Configuração do seu Firebase
+  const firebaseConfig = {
+    apiKey: "AIzaSyAqMoQuUsfm8YBgiH1tHgy_gfWrRr8kR24",
+    authDomain: "marketflow-ab90b.firebaseapp.com",
+    projectId: "marketflow-ab90b",
+    storageBucket: "marketflow-ab90b.appspot.com",
+    messagingSenderId: "479186969473",
+    appId: "1:479186969473:web:288fdb48605d420fac7e80"
+  };
+
+  // 🔹 Inicializa Firebase
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+
+  // 🔹 Login com email/senha
+  async function loginUser() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value.trim();
+
+    try {
+      await auth.signInWithEmailAndPassword(email, password);
+      alert('✅ Login bem-sucedido!');
+      window.location.href = 'app.html'; // redireciona para a página principal
+    } catch (error) {
+      alert('❌ Erro no login: ' + error.message);
+    }
+  }
+
+  // 🔹 Logout (pode usar no app.html)
+  async function logoutUser() {
+    await auth.signOut();
+    alert('Você saiu da conta.');
+    window.location.href = 'index.html';
+  }
+
+  // 🔹 Verifica se o usuário já está logado
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      console.log('Usuário logado:', user.email);
+    } else {
+      console.log('Nenhum usuário logado.');
+    }
+  });
+</script>
+
+</body>
+</html>

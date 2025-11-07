@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MarketFlow — Gerenciamento de Compras</title>
+  <style>
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter, Roboto, Arial, sans-serif;background:#f5f7fb;color:#113;}
+    .app{max-width:1100px;margin:28px auto;padding:20px;background:white;border-radius:12px;box-shadow:0 8px 30px rgba(16,24,40,0.06)}
+    header{display:flex;align-items:center;gap:16px}
+    header h1{margin:0;font-size:20px}
+    .controls{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+    .card{background:#fbfdff;padding:12px;border-radius:10px;border:1px solid rgba(17,24,34,0.04)}
+    .form-row{display:flex;gap:8px;align-items:center}
+    input[type=text],input[type=number],select{padding:8px;border-radius:8px;border:1px solid #d7e0ef;min-width:0}
+    button{padding:9px 12px;border-radius:8px;border:0;background:#0066ff;color:white;cursor:pointer}
+    button.ghost{background:transparent;color:#113;border:1px solid #e6eefc}
+    button.danger{background:#ff4d4f}
+    .main{display:grid;grid-template-columns:380px 1fr;gap:16px;margin-top:18px}
+    .sidebar{display:flex;flex-direction:column;gap:12px}
+    .list{display:flex;flex-direction:column;gap:8px}
+    .item{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;background:white;border:1px solid #f0f4ff}
+    .item-left{display:flex;align-items:center;gap:12px}
+    .item .meta{font-size:13px;color:#445}
+    .purchased{opacity:0.45;text-decoration:line-through}
+    @media(max-width:900px){.main{grid-template-columns:1fr}.sidebar{order:2}}
+	button.ghost {
+  background: transparent;
+  border: 1px solid #e0e0e0;
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 10px;
+}
+button.ghost:hover {
+  background: #e7f0ff;
+}
+button.danger {
+  background: transparent;
+  border: 1px solid #ff4d4f;
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 10px;
+  color: #ff4d4f;
+}
+button.danger:hover {
+  background: #ffe6e6;
+}
+
+#editName, #editQty, #editAisle, #editPrice {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+#saveEdit, #cancelEdit {
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#saveEdit {
+  background: #0066ff;
+  color: #fff;
+  border: none;
+}
+#cancelEdit {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+}
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>MarketFlow</h1>
+      <button id="logoutBtn" class="danger">Sair</button>
+    </header>
+
+    <div class="controls">
+      <div class="card" style="flex:1">
+        <form id="addItemForm" class="form-row" onsubmit="return false">
+          <input id="itemName" type="text" placeholder="Nome do item" required>
+          <input id="itemQty" type="number" min="1" value="1" style="width:84px">
+          <select id="itemAisle">
+            <option value="Mercearia">Mercearia</option><option value="Frescos">Frescos</option>
+            <option value="Higiene">Higiene</option><option value="Bebidas">Bebidas</option>
+            <option value="Limpeza">Limpeza</option><option value="Outros">Outros</option>
+          </select>
+          <input id="itemPrice" type="number" step="0.01" placeholder="R$" style="width:84px">
+          <button id="addBtn">Adicionar</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="main">
+      <aside class="sidebar">
+        <div class="card">
+          <h3>Listas</h3>
+          <select id="listsSelect" style="width:100%"></select>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <input id="listName" type="text" placeholder="Nome da lista" style="flex:1">
+            <button id="createList">Criar</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4>Resumo</h4>
+          <div id="summary">—</div>
+        </div>
+      </aside>
+
+      <section>
+        <div class="card">
+		<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+  <label for="sortSelect"><strong>Ordenar por:</strong></label>
+  <select id="sortSelect">
+    <option value="default">Padrão</option>
+    <option value="price_asc">Preço ↑</option>
+    <option value="price_desc">Preço ↓</option>
+    <option value="alpha">Alfabética (A–Z)</option>
+    <option value="date_new">Mais recentes</option>
+    <option value="date_old">Mais antigos</option>
+    <option value="aisle">Tipo</option>
+  </select>
+</div>
+
+          <h3>Itens</h3>
+          <div id="items" class="list">Carregando...</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAqMoQuUsfm8YBgiH1tHgy_gfWrRr8kR24",
+    authDomain: "marketflow-ab90b.firebaseapp.com",
+    projectId: "marketflow-ab90b",
+    storageBucket: "marketflow-ab90b.appspot.com",
+    messagingSenderId: "479186969473",
+    appId: "1:479186969473:web:288fdb48605d420fac7e80"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const listSelect = document.getElementById('listsSelect');
+  const listName = document.getElementById('listName');
+  const createListBtn = document.getElementById('createList');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const itemsEl = document.getElementById('items');
+  const summaryEl = document.getElementById('summary');
+  const addBtn = document.getElementById('addBtn');
+
+  let user = null;
+  let currentList = null;
+
+  auth.onAuthStateChanged(u => {
+    if (!u) location.href = "index.html";
+    else { user = u; loadLists(); }
+  });
+
+  // 🧾 Carregar listas
+  async function loadLists() {
+    db.collection('users').doc(user.uid).collection('lists')
+      .orderBy('createdAt', 'asc')
+      .onSnapshot(snapshot => {
+        listSelect.innerHTML = '';
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const opt = document.createElement('option');
+          const date = new Date(data.createdAt).toLocaleDateString('pt-BR');
+          opt.value = doc.id;
+          opt.textContent = `${doc.id} — (${date})`;
+          listSelect.appendChild(opt);
+        });
+        if (!currentList && snapshot.size > 0) {
+          currentList = snapshot.docs[0].id;
+          listSelect.value = currentList;
+          loadItems();
+        }
+      });
+  }
+
+  // ➕ Criar nova lista
+  createListBtn.onclick = async () => {
+    const name = listName.value.trim();
+    if (!name) return alert('Digite um nome!');
+    await db.collection('users').doc(user.uid).collection('lists').doc(name).set({ createdAt: Date.now() });
+    listName.value = '';
+    currentList = name;
+    loadItems();
+  };
+
+  // 🧭 Trocar lista
+  listSelect.onchange = () => {
+    currentList = listSelect.value;
+    loadItems();
+  };
+
+let currentSort = 'default';
+const sortSelect = document.getElementById('sortSelect');
+sortSelect.addEventListener('change', () => {
+  currentSort = sortSelect.value;
+  loadItems(); // recarrega com a nova ordenação
+});
+
+async function loadItems() {
+  if (!currentList) return;
+  db.collection('users').doc(user.uid).collection('lists').doc(currentList).collection('items')
+    .onSnapshot(snapshot => {
+      let items = [];
+      snapshot.forEach(doc => {
+        items.push({ id: doc.id, ...doc.data() });
+      });
+
+      // 🔹 Ordenação
+      if (currentSort === 'price_asc') items.sort((a, b) => (a.price || 0) - (b.price || 0));
+      if (currentSort === 'price_desc') items.sort((a, b) => (b.price || 0) - (a.price || 0));
+      if (currentSort === 'alpha') items.sort((a, b) => a.name.localeCompare(b.name));
+      if (currentSort === 'date_new') items.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+      if (currentSort === 'date_old') items.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+      if (currentSort === 'aisle') items.sort((a, b) => a.aisle.localeCompare(b.aisle));
+
+      // renderiza
+      itemsEl.innerHTML = '';
+      let total = 0;
+      items.forEach(data => {
+        total += (data.price || 0) * (data.qty || 1);
+        const div = document.createElement('div');
+        div.className = 'item';
+        const isPurchased = data.purchased ? 'style="text-decoration:line-through;opacity:0.5"' : '';
+
+        div.innerHTML = `
+          <div class="item-left">
+            <input type="checkbox" ${data.purchased ? 'checked' : ''} onchange="toggleItem('${data.id}', this.checked)">
+            <div ${isPurchased}>
+              <strong>${data.name}</strong> x${data.qty} — ${data.aisle}
+              ${data.price ? '• R$' + data.price.toFixed(2) : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="ghost" title="Editar" onclick="editItem('${data.id}')">✏️</button>
+            <button class="danger" title="Excluir" onclick="deleteItem('${data.id}')">🗑️</button>
+          </div>`;
+        itemsEl.appendChild(div);
+      });
+
+      summaryEl.textContent = `${items.length} itens — Total estimado: R$ ${total.toFixed(2)}`;
+    });
+}
+
+
+
+// ✏️ Função para editar um item existente
+// ✏️ Editar item completo (nome, quantidade, tipo e preço)
+window.editItem = async (id) => {
+  const ref = db.collection('users').doc(user.uid)
+    .collection('lists').doc(currentList)
+    .collection('items').doc(id);
+  const docSnap = await ref.get();
+  if (!docSnap.exists) return alert('Item não encontrado.');
+  const item = docSnap.data();
+
+  // cria o modal
+  const overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.top = 0;
+  overlay.style.left = 0;
+  overlay.style.width = '100%';
+  overlay.style.height = '100%';
+  overlay.style.background = 'rgba(0,0,0,0.4)';
+  overlay.style.display = 'flex';
+  overlay.style.justifyContent = 'center';
+  overlay.style.alignItems = 'center';
+  overlay.style.zIndex = 1000;
+
+  const modal = document.createElement('div');
+  modal.style.background = '#fff';
+  modal.style.padding = '20px';
+  modal.style.borderRadius = '10px';
+  modal.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+  modal.style.width = '320px';
+  modal.innerHTML = `
+    <h3 style="margin-top:0;">Editar Item</h3>
+    <label>Nome:</label>
+    <input id="editName" type="text" value="${item.name}" style="width:100%;margin-bottom:8px">
+    
+    <label>Quantidade:</label>
+    <input id="editQty" type="number" min="1" value="${item.qty}" style="width:100%;margin-bottom:8px">
+    
+    <label>Tipo / Corredor:</label>
+    <select id="editAisle" style="width:100%;margin-bottom:8px">
+      <option ${item.aisle === 'Mercearia' ? 'selected' : ''}>Mercearia</option>
+      <option ${item.aisle === 'Frescos' ? 'selected' : ''}>Frescos</option>
+      <option ${item.aisle === 'Higiene' ? 'selected' : ''}>Higiene</option>
+      <option ${item.aisle === 'Bebidas' ? 'selected' : ''}>Bebidas</option>
+      <option ${item.aisle === 'Limpeza' ? 'selected' : ''}>Limpeza</option>
+      <option ${item.aisle === 'Outros' ? 'selected' : ''}>Outros</option>
+    </select>
+    
+    <label>Preço (R$):</label>
+    <input id="editPrice" type="number" step="0.01" value="${item.price || ''}" style="width:100%;margin-bottom:12px">
+    
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+      <button id="cancelEdit" class="ghost">Cancelar</button>
+      <button id="saveEdit" class="danger">Salvar</button>
+    </div>
+  `;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // cancelar
+  document.getElementById('cancelEdit').onclick = () => overlay.remove();
+
+  // salvar
+  document.getElementById('saveEdit').onclick = async () => {
+    const newName = document.getElementById('editName').value.trim();
+    const newQty = Number(document.getElementById('editQty').value);
+    const newAisle = document.getElementById('editAisle').value;
+    const newPrice = parseFloat(document.getElementById('editPrice').value);
+
+    if (!newName) return alert('O nome não pode estar vazio.');
+
+    await ref.update({
+      name: newName,
+      qty: newQty || 1,
+      aisle: newAisle,
+      price: isNaN(newPrice) ? null : newPrice
+    });
+
+    overlay.remove();
+  };
+};
+
+
+  // ✅ Adicionar item
+  addBtn.onclick = async () => {
+    if (!currentList) {
+      alert('Selecione ou crie uma lista antes de adicionar itens!');
+      return;
+    }
+    const name = document.getElementById('itemName').value.trim();
+    const qty = Number(document.getElementById('itemQty').value);
+    const aisle = document.getElementById('itemAisle').value;
+    const price = Number(document.getElementById('itemPrice').value);
+    if (!name) return alert('Digite o nome do item!');
+    await db.collection('users').doc(user.uid)
+  .collection('lists').doc(currentList)
+  .collection('items').add({
+    name,
+    qty,
+    aisle,
+    price,
+    purchased: false,
+    addedAt: Date.now() // 👈 aqui adiciona a data
+  });
+
+  };
+
+  // 🧾 Marcar item como comprado
+  window.toggleItem = async (id, purchased) => {
+    await db.collection('users').doc(user.uid)
+      .collection('lists').doc(currentList)
+      .collection('items').doc(id).update({ purchased });
+  };
+
+  // 🗑️ Excluir item
+  window.deleteItem = async (id) => {
+    if (confirm('Excluir item?')) {
+      await db.collection('users').doc(user.uid)
+        .collection('lists').doc(currentList)
+        .collection('items').doc(id).delete();
+    }
+  };
+
+  // 🚪 Logout
+  logoutBtn.onclick = () => auth.signOut();
+
+  // ✏️ Editar nome da lista
+  async function renameList() {
+    if (!currentList) return alert('Selecione uma lista primeiro!');
+    const newName = prompt('Novo nome da lista:', currentList);
+    if (!newName || newName.trim() === '' || newName === currentList) return;
+    const currentData = await db.collection('users').doc(user.uid).collection('lists').doc(currentList).get();
+    const itemsSnap = await db.collection('users').doc(user.uid).collection('lists').doc(currentList).collection('items').get();
+
+    // criar nova lista
+    const newListRef = db.collection('users').doc(user.uid).collection('lists').doc(newName.trim());
+    await newListRef.set({ createdAt: currentData.data().createdAt });
+
+    // copiar itens
+    const batch = db.batch();
+    itemsSnap.forEach(doc => {
+      const newDoc = newListRef.collection('items').doc(doc.id);
+      batch.set(newDoc, doc.data());
+    });
+    await batch.commit();
+
+    // apagar lista antiga
+    await db.collection('users').doc(user.uid).collection('lists').doc(currentList).delete();
+    currentList = newName.trim();
+    loadLists();
+  }
+
+  // 🗑️ Deletar lista
+  async function deleteList() {
+    if (!currentList) return alert('Selecione uma lista primeiro!');
+    if (!confirm(`Excluir a lista "${currentList}" e todos os itens dela?`)) return;
+    const itemsSnap = await db.collection('users').doc(user.uid).collection('lists').doc(currentList).collection('items').get();
+    const batch = db.batch();
+    itemsSnap.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    await db.collection('users').doc(user.uid).collection('lists').doc(currentList).delete();
+    currentList = null;
+    itemsEl.innerHTML = 'Nenhuma lista selecionada';
+    summaryEl.textContent = '—';
+    loadLists();
+  }
+
+  // ➕ Botões de editar e excluir lista
+  const listSection = document.querySelector('.sidebar .card');
+  const btnEditList = document.createElement('button');
+  btnEditList.textContent = 'Renomear Lista';
+  btnEditList.className = 'ghost';
+  btnEditList.onclick = renameList;
+
+  const btnDeleteList = document.createElement('button');
+  btnDeleteList.textContent = 'Excluir Lista';
+  btnDeleteList.className = 'danger';
+  btnDeleteList.onclick = deleteList;
+
+  const controlDiv = document.createElement('div');
+  controlDiv.style.display = 'flex';
+  controlDiv.style.gap = '8px';
+  controlDiv.style.marginTop = '8px';
+  controlDiv.appendChild(btnEditList);
+  controlDiv.appendChild(btnDeleteList);
+
+  listSection.appendChild(controlDiv);
+</script>
+
+</html>
